@@ -8,20 +8,20 @@ from .profile import PKIProfile
 @task(
     help={
         'profile': 'The PKI profile to initialize.',
-    }
+    },
+    positional=('profile',),
 )
-def pki_init(
+def initialize(
         ctx,
-        profile,
+        profile=None,
 ):
     """
-    Initializes directory structure 
+    Initializes directory structure
     """
-    if isinstance(profile, str):
-        profile = PKIProfile.from_context(profile, ctx)
+    profile = PKIProfile.from_context(profile, ctx)
 
-    for ca_name in ('root',) + tuple(profile.intermediates.keys()):
-        pki_ca_init(ctx, profile.dir, ca_name)
+    for ca_name in ('root',) + tuple(sorted(profile.intermediates.keys())):
+        ca_initialize(ctx, profile.dir, ca_name)
         ca_private = os.path.join(profile.private, ca_name)
         if not os.path.isdir(ca_private):
             os.makedirs(ca_private, 0o700)
@@ -38,7 +38,7 @@ def pki_init(
         'dir_mode': 'The octal file mode of the CA directories, defaults to 0o755.',
     }
 )
-def pki_ca_init(
+def ca_initialize(
         ctx,
         base_dir,
         name,

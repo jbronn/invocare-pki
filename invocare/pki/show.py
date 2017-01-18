@@ -6,7 +6,7 @@ from invoke import task
         'certificate': 'The path to the certificate file to show information.',
     }
 )
-def pki_show(
+def show(
         ctx,
         certificate
 ):

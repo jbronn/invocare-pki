@@ -18,12 +18,20 @@ from .profile import PKIProfile
         'days': 'The number of days the CA certificate is valid for.',
     }
 )
-def inter_ca(ctx, profile, ca_name, bits=None, days=None):
+def inter_ca(
+        ctx,
+        profile=None,
+        ca_name=None,
+        batch=False,
+        bits=None,
+        days=None
+):
     """
     Initializes an intermediate CA in the profile.
     """
-    if isinstance(profile, str):
-        profile = PKIProfile.from_context(profile, ctx)
+    profile = PKIProfile.from_context(profile, ctx)
+    config = ctx.config.get('pki', {})
+    ca_name = ca_name or config.get('ca_name', None)
 
     if not ca_name in profile.intermediates:
         sys.stderr.write('No configuration for "%s" intermediate CA.\n' % ca_name)
@@ -81,6 +89,7 @@ def inter_ca(ctx, profile, ca_name, bits=None, days=None):
             'sign',
             config_file=profile.config_file,
             config_name='root',
+            batch=batch,
             days=days or int(profile.cfg['root']['default_days']),
             extensions='intermediate_cert',
             in_file=req_file,
@@ -123,15 +132,21 @@ def inter_ca(ctx, profile, ca_name, bits=None, days=None):
             )
     else:
         sys.stderr.write('Intermediate CA certificate already exists for "%s".\n' % ca_name)
+        return
 
 
 @task
-def root_ca(ctx, profile, bits=None, days=3652):
+def root_ca(
+        ctx,
+        profile=None,
+        batch=False,
+        bits=None,
+        days=3652,
+):
     """
     Initializes the root CA for the profile.
     """
-    if isinstance(profile, str):
-        profile = PKIProfile.from_context(profile, ctx)
+    profile = PKIProfile.from_context(profile, ctx)
 
     if not os.path.isfile(profile.config_file):
         sys.stderr.write('PKI profile "%s" has not been initialized.\n' % profile.name)
@@ -179,6 +194,7 @@ def root_ca(ctx, profile, bits=None, days=3652):
             'selfsign',
             config_file=profile.config_file,
             config_name='root',
+            batch=batch,
             days=days,
             in_file=req_file,
             out_file=cert_file,
@@ -201,25 +217,25 @@ def root_ca(ctx, profile, bits=None, days=3652):
                 out_file=crl_file,
             )
     else:
-        sys.stderr.write('Root CA certificate already exists %s profile.\n' % profile)
-        sys.exit(os.EX_USAGE)
+        sys.stderr.write('Root CA certificate already exists for the %s profile.\n' % profile.name)
+        return
 
 
 @task
-def pki_cert(
+def certificate(
         ctx,
-        profile,
-        ca_name,
-        common_name,
+        profile=None,
+        ca_name=None,
+        common_name=None,
+        batch=False,
         days=None,
         bits=None,
         san=None,
 ):
-    if isinstance(profile, str):
-        profile = PKIProfile.from_context(profile, ctx)
-
-    # TODO: Sanitize for things like wildcard certs.
-    cert_name = common_name
+    profile = PKIProfile.from_context(profile, ctx)
+    config = ctx.config.get('pki', {})
+    ca_name = ca_name or config.get('ca_name', None)
+    cert_name = common_name or config.get('common_name', None)
 
     ca_dir = os.path.join(profile.dir, ca_name)
     cert_file = os.path.join(ca_dir, 'certs', '%s.crt' % cert_name)
@@ -256,6 +272,7 @@ def pki_cert(
             'sign',
             config_file=profile.config_file,
             config_name=ca_name,
+            batch=batch,
             days=days or int(profile.cfg[ca_name]['default_days']),
             extensions=profile.cfg[ca_name]['x509_extensions'],
             in_file=req_file,
@@ -271,16 +288,20 @@ def pki_cert(
             return
 
 
-@task
-def pki_revoke(
+@task(
+    positional=('profile', 'ca_name'),
+)
+def revoke(
         ctx,
-        profile,
-        ca_name,
         cert_file,
+        profile=None,
+        ca_name=None,
+        batch=False,
         reason='unspecified',
 ):
-    if isinstance(profile, str):
-        profile = PKIProfile.from_context(profile, ctx)
+    profile = PKIProfile.from_context(profile, ctx)
+    config = ctx.config.get('pki', {})
+    ca_name = ca_name or config.get('ca_name', None)
 
     crl_file = os.path.join(profile.dir, ca_name, 'ca.crl')
     pass_file = os.path.join(profile.private, ca_name, 'ca.pass')
@@ -290,6 +311,7 @@ def pki_revoke(
         'revoke',
         config_file=profile.config_file,
         config_name=ca_name,
+        batch=batch,
         in_file=cert_file,
         passin=pass_file,
     )
@@ -299,6 +321,7 @@ def pki_revoke(
         'gencrl',
         config_file=profile.config_file,
         config_name=ca_name,
+        batch=batch,
         passin=pass_file,
         out_file=crl_file,
     )

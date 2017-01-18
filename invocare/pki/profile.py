@@ -1,4 +1,5 @@
 import os
+import sys
 
 from collections import OrderedDict
 
@@ -69,14 +70,15 @@ class PKIProfile:
                 ('private', self.private),
             ))
 
+            dn = options.get('dn', {})
             self.dn = OrderedDict((
-                ('countryName', options.get('countryName', 'US')),
-                ('stateOrProvinceName', options.get('stateOrProvinceName', 'Any-State')),
-                ('localityName', options.get('localityName', 'Springfield')),
-                ('organizationName', options.get('organizationName', 'Internet Widgits Pty Ltd')),
+                ('countryName', dn.get('countryName', 'US')),
+                ('stateOrProvinceName', dn.get('stateOrProvinceName', 'Any-State')),
+                ('localityName', dn.get('localityName', 'Springfield')),
+                ('organizationName', dn.get('organizationName', 'Internet Widgits Pty Ltd')),
             ))
-            if 'organizationalUnitName' in options:
-                self.dn['organizationalUnitName'] = options['organizationalUnitName']
+            if 'organizationalUnitName' in dn:
+                self.dn['organizationalUnitName'] = dn['organizationalUnitName']
 
             self.cfg = self.default_config()
 
@@ -171,9 +173,19 @@ class PKIProfile:
         return cfg
 
     @classmethod
-    def from_context(cls, name, ctx):
-        options = ctx.get('pki', {}).get(name, {})
-        return PKIProfile(name, **options)
+    def from_context(cls, obj, ctx):
+        if isinstance(obj, PKIProfile):
+            return obj
+        else:
+            config = ctx.config.get('pki', {})
+            profile_name = obj or config.get('profile', None)
+            if profile_name:
+                options = config.get(profile_name, {})
+                return PKIProfile(profile_name, **options)
+            else:
+                sys.stderr.write('Must provide a profile name.\n')
+                sys.exit(os.EX_USAGE)
+
 
     def req_cfg(self, ca_name, common_name, san=None):
         """
